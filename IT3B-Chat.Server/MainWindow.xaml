@@ -15,7 +15,7 @@
 
         <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="10">
             <TextBlock Text="Adresa serveru:" VerticalAlignment="Center"/>
-            <TextBox x:Name="serverAddressTextBox" Width="200" Margin="5" VerticalAlignment="Center" Text="127.0.0.1"/>
+            <TextBox x:Name="serverAddressTextBox" Width="200" Margin="5" VerticalAlignment="Center" Text="http://localhost:8080/"/>
             <Button Content="Připojit" Click="ConnectButton_Click" Margin="5"/>
             <Button Content="Odpojit" Click="DisconnectButton_Click" Margin="5"/>
         </StackPanel>

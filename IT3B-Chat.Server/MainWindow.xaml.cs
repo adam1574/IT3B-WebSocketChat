@@ -1,8 +1,11 @@
 ﻿using System;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
-using System.Net.Sockets;
+using System.Net;
+using System.Net.WebSockets;
 using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Windows;
 
 namespace IT3B_Chat.Server
@@ -10,10 +13,8 @@ namespace IT3B_Chat.Server
     public partial class MainWindow : Window
     {
         public ObservableCollection<string> Messages { get; set; }
-        public ObservableCollection<string> ConnectionEvents { get; set; }
-        private BackgroundWorker messageReceiver;
-        private TcpClient client;
-        private NetworkStream stream;
+        private HttpListener httpListener;
+        private WebSocket webSocket;
 
         public MainWindow()
         {
@@ -21,60 +22,84 @@ namespace IT3B_Chat.Server
             DataContext = this;
 
             Messages = new ObservableCollection<string>();
-            ConnectionEvents = new ObservableCollection<string>();
 
-            messageReceiver = new BackgroundWorker();
-            messageReceiver.DoWork += MessageReceiver_DoWork;
-            messageReceiver.RunWorkerAsync();
+            StartWebSocketServer();
         }
 
-        private void MessageReceiver_DoWork(object sender, DoWorkEventArgs e)
-        {
-            // Simulace příjmu zpráv ze serveru
-        }
-
-        private void ConnectButton_Click(object sender, RoutedEventArgs e)
+        private async void StartWebSocketServer()
         {
             try
             {
-                client = new TcpClient(serverAddressTextBox.Text, 1234);
-                stream = client.GetStream();
-                MessageBox.Show("Připojení k serveru bylo úspěšné.");
+                httpListener = new HttpListener();
+                httpListener.Prefixes.Add("http://localhost:8080/");
+                httpListener.Start();
+
+                HttpListenerContext context = await httpListener.GetContextAsync();
+                if (context.Request.IsWebSocketRequest)
+                {
+                    HttpListenerWebSocketContext webSocketContext = await context.AcceptWebSocketAsync(null);
+                    webSocket = webSocketContext.WebSocket;
+                    await ReceiveMessages();
+                }
+                else
+                {
+                    context.Response.StatusCode = 400;
+                    context.Response.Close();
+                }
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Chyba při připojování k serveru: " + ex.Message);
+                MessageBox.Show("Chyba při spuštění WebSocket serveru: " + ex.Message);
             }
         }
 
-        private void DisconnectButton_Click(object sender, RoutedEventArgs e)
+        private async Task ReceiveMessages()
         {
-            if (client != null)
+            byte[] buffer = new byte[1024];
+            while (webSocket.State == WebSocketState.Open)
             {
-                client.Close();
-                MessageBox.Show("Odpojení od serveru.");
+                WebSocketReceiveResult result = await webSocket.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None);
+                string message = Encoding.UTF8.GetString(buffer, 0, result.Count);
+                Messages.Add(message); // Přidání přijaté zprávy do kolekce pro zobrazení
+            }
+        }
+
+        private async Task SendText(string text)
+        {
+            if (webSocket != null && webSocket.State == WebSocketState.Open)
+            {
+                byte[] buffer = Encoding.UTF8.GetBytes(text);
+                await webSocket.SendAsync(new ArraySegment<byte>(buffer), WebSocketMessageType.Text, true, CancellationToken.None);
             }
         }
 
         private void SendButton_Click(object sender, RoutedEventArgs e)
         {
-            try
+            if (!string.IsNullOrWhiteSpace(messageTextBox.Text))
             {
-                if (client != null && client.Connected)
-                {
-                    byte[] data = Encoding.UTF8.GetBytes(messageTextBox.Text);
-                    stream.Write(data, 0, data.Length);
-                    Messages.Add("Odesláno: " + messageTextBox.Text); // Přidání odeslané zprávy do kolekce pro zobrazení
-                    messageTextBox.Clear();
-                }
-                else
-                {
-                    MessageBox.Show("Není připojeno k serveru.");
-                }
+                SendText(messageTextBox.Text);
+                messageTextBox.Clear();
             }
-            catch (Exception ex)
+        }
+
+        protected override void OnClosing(CancelEventArgs e)
+        {
+            base.OnClosing(e);
+            httpListener?.Stop();
+            webSocket?.Dispose();
+        }
+        private void ConnectButton_Click(object sender, RoutedEventArgs e)
+        {
+            StartWebSocketServer();
+        }
+
+        private void DisconnectButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (httpListener != null)
             {
-                MessageBox.Show("Chyba při odesílání zprávy: " + ex.Message);
+                httpListener.Stop();
+                webSocket?.Dispose();
+                Messages.Add("Odpojeno od serveru.");
             }
         }
     }
