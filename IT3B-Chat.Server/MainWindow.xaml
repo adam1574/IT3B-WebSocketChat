@@ -7,6 +7,19 @@
         mc:Ignorable="d"
         Title="MainWindow" Height="450" Width="800">
     <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
 
+        <StackPanel Grid.Column="0" Margin="10">
+            <TextBlock Text="Zprávy z klientů" FontWeight="Bold" Margin="0,0,0,5"/>
+            <ListBox ItemsSource="{Binding Messages}" />
+        </StackPanel>
+
+        <StackPanel Grid.Column="1" Margin="10">
+            <TextBlock Text="Události připojení/odpojení klientů" FontWeight="Bold" Margin="0,0,0,5"/>
+            <ListBox ItemsSource="{Binding ConnectionEvents}" />
+        </StackPanel>
     </Grid>
 </Window>
